@@ -1,5 +1,6 @@
 import torch
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
+from transformers import GPT2Tokenizer, GPT2LMHeadModel, top_k_top_p_filtering
+from transformers.generation_beam_search import BeamSearchScorer
 from transformers.modeling_utils import *
 from jericho.util import clean
 from jericho.defines import ILLEGAL_ACTIONS, NO_EFFECT_ACTIONS
@@ -156,9 +157,7 @@ def generate_topk(
     if num_return_sequences != 1 and False:
         # Expand input to num return sequences
         input_ids = input_ids.unsqueeze(1).expand(batch_size, num_return_sequences, cur_len)
-        input_ids = input_ids.contiguous().view(
-            batch_size * num_return_sequences, cur_len
-        )  # (batch_size * num_return_sequences, cur_len)
+        input_ids = input_ids.contiguous().view(batch_size * num_return_sequences, cur_len)
         effective_batch_size = batch_size * num_return_sequences
     else:
         effective_batch_size = batch_size
@@ -184,7 +183,7 @@ def generate_topk(
             mask_out
         )
     else:
-        output = _generate_no_beam_search(
+        output = self._generate_no_beam_search(
             self,
             input_ids,
             cur_len,
@@ -270,6 +269,7 @@ def _generate_beam_search_topk(
             if temperature != 1.0:
                 scores = scores / temperature
             # Top-p/top-k filtering
+            #   Frederik: was not found
             scores = top_k_top_p_filtering(
                 scores, top_k=top_k, top_p=top_p, min_tokens_to_keep=2
             )  # (batch_size * num_beams, vocab_size)
@@ -419,3 +419,51 @@ def _generate_beam_search_topk(
         decoded = torch.stack(best).type(torch.long).to(next(self.parameters()).device)
 
     return decoded
+
+
+class BeamHypotheses:
+    def __init__(self, num_beams: int, max_length: int, length_penalty: float, early_stopping: bool):
+        """
+        Initialize n-best list of hypotheses.
+        """
+        self.max_length = max_length - 1  # ignoring bos_token
+        self.length_penalty = length_penalty
+        self.early_stopping = early_stopping
+        self.num_beams = num_beams
+        self.beams = []
+        self.worst_score = 1e9
+
+    def __len__(self):
+        """
+        Number of hypotheses in the list.
+        """
+        return len(self.beams)
+
+    def add(self, hyp: torch.LongTensor, sum_logprobs: float):
+        """
+        Add a new hypothesis to the list.
+        """
+        score = sum_logprobs / (hyp.shape[-1] ** self.length_penalty)
+        if len(self) < self.num_beams or score > self.worst_score:
+            self.beams.append((score, hyp))
+            if len(self) > self.num_beams:
+                sorted_next_scores = sorted([(s, idx) for idx, (s, _) in enumerate(self.beams)])
+                del self.beams[sorted_next_scores[0][1]]
+                self.worst_score = sorted_next_scores[1][0]
+            else:
+                self.worst_score = min(score, self.worst_score)
+
+    def is_done(self, best_sum_logprobs: float, cur_len: int) -> bool:
+        """
+        If there are enough hypotheses and that none of the hypotheses being generated can become better than the worst
+        one in the heap, then we are done with this sentence.
+        """
+
+        if len(self) < self.num_beams:
+            return False
+        elif self.early_stopping:
+            return True
+        else:
+            cur_score = best_sum_logprobs / cur_len ** self.length_penalty
+            ret = self.worst_score >= cur_score
+            return ret

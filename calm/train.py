@@ -4,9 +4,9 @@ import torch
 import argparse
 from transformers import WEIGHTS_NAME, CONFIG_NAME, AdamW, get_linear_schedule_with_warmup
 from tqdm import tqdm
-
 from dataset import *
 from lm import *
+
 
 def train(train_dataloader, validation_dataloader, lm, save_dir_root, args):
     if args.model_type == 'gpt':
@@ -223,10 +223,11 @@ def save_ngram(lm, save_dir_root, name):
     with open(verb_candidates_file, "w+") as f:
         json.dump(lm.verb_candidates, f)
     with open(counts_file, "w+") as f:
-        dict_counts = {k : dict(lm.counts[k]) for k in lm.counts}
+        dict_counts = {k: dict(lm.counts[k]) for k in lm.counts}
         json.dump(dict(dict_counts), f)
     with open(params_file, "w+") as f:
         json.dump(params, f)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -250,6 +251,7 @@ def parse_args():
 
     return parser.parse_args()
 
+
 if __name__ == "__main__":
     args = parse_args()
     print(args)
@@ -267,22 +269,23 @@ if __name__ == "__main__":
     if args.exclude_jericho:
         # This is the list of transcripts in lm_data.zip that correspond to jericho games
         exclude = ['intfic_clubfloyd_20090402.html', \
-                    'intfic_clubfloyd_20090904.html', \
-                    'intfic_clubfloyd_20160401.html', \
-                    'intfic_clubfloyd_20160401.txt', \
-                    'intfic_clubfloyd_20160701.html', \
-                    'intfic_clubfloyd_20161102.html', \
-                    'intfic_clubfloyd_20170104.html', \
-                    'intfic_clubfloyd_20100903.html', \
-                    'intfic_clubfloyd_20080601.html']
+                   'intfic_clubfloyd_20090904.html', \
+                   'intfic_clubfloyd_20160401.html', \
+                   'intfic_clubfloyd_20160401.txt', \
+                   'intfic_clubfloyd_20160701.html', \
+                   'intfic_clubfloyd_20161102.html', \
+                   'intfic_clubfloyd_20170104.html', \
+                   'intfic_clubfloyd_20100903.html', \
+                   'intfic_clubfloyd_20080601.html']
 
     train_data, validation_data = get_dataloader(exclude, args.data_dir, model.tokenizer,
-                                                    max_len=args.max_len,
-                                                    shuffle_trajectories=args.shuffle_trajectories == 1,
-                                                    bs=args.bs, data_percentage=args.data_percentage)
+                                                 max_len=args.max_len,
+                                                 shuffle_trajectories=args.shuffle_trajectories == 1,
+                                                 bs=args.bs, data_percentage=args.data_percentage)
 
     stats = train(train_data, validation_data, model, os.path.abspath(args.save_dir_root), args)
     if args.model_type == 'gpt':
         stats = list(zip(*stats))
 
-    json.dump(stats, open(os.path.join(args.save_dir_root, args.model_type, args.model_name, 'stats.json'), 'w'), indent=4)
+    json.dump(stats, open(os.path.join(args.save_dir_root, args.model_type, args.model_name, 'stats.json'), 'w'),
+              indent=4)
