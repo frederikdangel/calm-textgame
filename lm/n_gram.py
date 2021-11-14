@@ -83,7 +83,6 @@ class NGram(BaseLM):
         return count / total
 
 
-
 def mask_no_effect_verbs(candidates):
     filtered_candidates = []
     for i in candidates:

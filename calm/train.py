@@ -1,6 +1,3 @@
-import os
-import json
-import torch
 import argparse
 from transformers import WEIGHTS_NAME, CONFIG_NAME, AdamW, get_linear_schedule_with_warmup
 from tqdm import tqdm
