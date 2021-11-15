@@ -1,6 +1,6 @@
 import torch
+import torch.nn.functional as F
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, top_k_top_p_filtering
-from transformers.generation_beam_search import BeamSearchScorer
 from transformers.modeling_utils import *
 from jericho.util import clean
 from jericho.defines import ILLEGAL_ACTIONS, NO_EFFECT_ACTIONS
@@ -269,7 +269,6 @@ def _generate_beam_search_topk(
             if temperature != 1.0:
                 scores = scores / temperature
             # Top-p/top-k filtering
-            #   Frederik: was not found
             scores = top_k_top_p_filtering(
                 scores, top_k=top_k, top_p=top_p, min_tokens_to_keep=2
             )  # (batch_size * num_beams, vocab_size)
@@ -304,8 +303,7 @@ def _generate_beam_search_topk(
 
             # if we are done with this sentence
             done[batch_idx] = done[batch_idx] or generated_hyps[batch_idx].is_done(
-                next_scores[batch_idx].max().item()
-            )
+                next_scores[batch_idx].max().item())
             if done[batch_idx]:
                 assert (
                         len(generated_hyps[batch_idx]) >= num_beams
